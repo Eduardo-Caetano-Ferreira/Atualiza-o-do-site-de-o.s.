@@ -18,10 +18,13 @@ import {
   Upload,
   Loader2,
   Image as ImageIcon,
-  X
+  X,
+  RefreshCw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { GoogleGenAI } from "@google/genai";
+import { db } from './firebase';
+import { doc, onSnapshot, setDoc, getDoc } from 'firebase/firestore';
 
 interface Technician {
   name: string;
@@ -52,6 +55,7 @@ interface FormData {
   operador: string;
   autorizacaoExcecao: string;
   nomeAutorizador: string;
+  horarioEspecifico: string;
 }
 
 const initialFormState: FormData = {
@@ -71,6 +75,7 @@ const initialFormState: FormData = {
   operador: 'Eduardo',
   autorizacaoExcecao: 'Não',
   nomeAutorizador: '',
+  horarioEspecifico: '',
 };
 
 const defaultTechData: TechData = {
@@ -92,51 +97,52 @@ const defaultTechData: TechData = {
 
 export default function App() {
   const [formData, setFormData] = useState<FormData>(initialFormState);
-  const [techData, setTechData] = useState<TechData>(() => {
-    const saved = localStorage.getItem('techData');
-    return saved ? JSON.parse(saved) : defaultTechData;
-  });
+  const [techData, setTechData] = useState<TechData>(defaultTechData);
+  const [isLoadingTech, setIsLoadingTech] = useState(true);
   const [showTechnicians, setShowTechnicians] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [copied, setCopied] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
 
-  // Persistência de dados dos técnicos
+  // Sincronização em tempo real com o Firebase
   React.useEffect(() => {
-    localStorage.setItem('techData', JSON.stringify(techData));
-  }, [techData]);
+    const techDoc = doc(db, 'settings', 'technicians');
+    
+    const unsubscribe = onSnapshot(techDoc, (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data() as TechData;
+        setTechData(data);
+      } else {
+        // Se não existir no banco, inicializa com os dados padrão
+        setDoc(techDoc, defaultTechData);
+      }
+      setIsLoadingTech(false);
+    }, (error) => {
+      console.error("Erro ao sincronizar técnicos:", error);
+      setIsLoadingTech(false);
+    });
 
-  const formatPhone = (value: string) => {
-    const numbers = value.replace(/\D/g, '');
-    if (numbers.length <= 11) {
-      return numbers
-        .replace(/^(\d{2})(\d)/g, '($1) $2')
-        .replace(/(\d{5})(\d)/, '$1-$2')
-        .substring(0, 15);
-    }
-    return value.substring(0, 15);
-  };
+    return () => unsubscribe();
+  }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    let finalValue = value;
-
-    if (name === 'contato') {
-      finalValue = formatPhone(value);
-    }
-
-    setFormData(prev => ({ ...prev, [name]: finalValue }));
+    setFormData(prev => ({ ...prev, [name]: value }));
     if (errors.includes(name)) {
       setErrors(prev => prev.filter(err => err !== name));
     }
   };
 
   const handleClear = () => {
-    if (window.confirm("Tem certeza que deseja limpar todos os campos?")) {
-      setFormData(initialFormState);
-      setErrors([]);
-    }
+    setShowClearConfirm(true);
+  };
+
+  const confirmClear = () => {
+    setFormData(initialFormState);
+    setErrors([]);
+    setShowClearConfirm(false);
   };
 
   const validateForm = () => {
@@ -149,6 +155,10 @@ export default function App() {
     if (!formData.clienteDesde) newErrors.push('clienteDesde');
     if (!formData.solicitacao) newErrors.push('solicitacao');
     if (!formData.sinalStatus) newErrors.push('sinalStatus');
+
+    if (formData.periodo === 'Após (Informar Horário)') {
+      if (!formData.horarioEspecifico) newErrors.push('horarioEspecifico');
+    }
 
     if (formData.atendimentoRecente === 'Sim') {
       if (!formData.tipoUltimaOs) newErrors.push('tipoUltimaOs');
@@ -167,25 +177,42 @@ export default function App() {
   const handleCopy = () => {
     if (!validateForm()) return;
 
-    let script = `
---- ORDEM DE SERVIÇO ---
-Agendamento: ${formData.data} | Período: ${formData.periodo}
-Cliente: Roteador: ${formData.roteador} | ONU: ${formData.onu}
-Contato: ${formData.contato} | Cliente desde: ${formData.clienteDesde}
-Solicitação: ${formData.solicitacao}
-Técnico: Sinal/Status: ${formData.sinalStatus}
-Logs: ${formData.historicoLogs}
-Atendimento Recente: ${formData.atendimentoRecente}
-    `.trim();
-
-    if (formData.atendimentoRecente === 'Sim') {
-      script += `\nDetalhes Última O.S.: Tipo: ${formData.tipoUltimaOs} | Data: ${formData.dataUltimaOs} | Encerramento: ${formData.encerramentoUltimaOs}`;
+    let periodoTexto = formData.periodo;
+    if (formData.periodo === 'Após (Informar Horário)' && formData.horarioEspecifico) {
+      periodoTexto += ` (${formData.horarioEspecifico})`;
     }
 
-    script += `\nOperador: ${formData.operador} | Autorização Exceção: ${formData.autorizacaoExcecao}`;
+    let script = `
+=== AGENDAMENTO ===
+DATA: ${formData.data.split('-').reverse().join('/')}
+PERÍODO: ${periodoTexto}
+
+=== INFORMAÇÕES DO CLIENTE ===
+Roteador: ${formData.roteador}
+ONU: ${formData.onu}
+Contato: ${formData.contato}
+Cliente desde: ${formData.clienteDesde}
+
+=== DETALHES DA SOLICITAÇÃO ===
+${formData.solicitacao}
+
+=== INFORMAÇÕES TÉCNICAS ===
+Sinal/Status: ${formData.sinalStatus}
+Histórico:
+${formData.historicoLogs}
+
+=== HISTÓRICO ===
+Recente Suporte/OS: ${formData.atendimentoRecente}
+`.trim();
+
+    if (formData.atendimentoRecente === 'Sim') {
+      script += `\nTipo: ${formData.tipoUltimaOs} | Data: ${formData.dataUltimaOs} | Encerramento: ${formData.encerramentoUltimaOs}`;
+    }
+
+    script += `\n\n=== ATENDIMENTO ===\nAtendente: ${formData.operador}\nAutorização por Exceção: ${formData.autorizacaoExcecao}`;
 
     if (formData.autorizacaoExcecao === 'Sim') {
-      script += ` | Autorizado por: ${formData.nomeAutorizador}`;
+      script += `\nAutorizado por: ${formData.nomeAutorizador}`;
     }
 
     navigator.clipboard.writeText(script);
@@ -247,7 +274,13 @@ Atendimento Recente: ${formData.atendimentoRecente}
       if (jsonMatch) {
         const parsedData = JSON.parse(jsonMatch[0]);
         if (parsedData.moto && Array.isArray(parsedData.moto) && parsedData.car && Array.isArray(parsedData.car)) {
-          setTechData(parsedData);
+          // Salva no Firebase em vez de apenas no estado local
+          const techDoc = doc(db, 'settings', 'technicians');
+          await setDoc(techDoc, {
+            ...parsedData,
+            updatedAt: new Date().toISOString()
+          });
+          
           setShowConfig(false);
           setShowTechnicians(true);
         } else {
@@ -277,8 +310,8 @@ Atendimento Recente: ${formData.atendimentoRecente}
         
         {/* Header com Botões de Ação */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-            Ordem de Serviço Geral
+          <h1 className="text-2xl font-bold text-slate-800">
+            Gerenciador de O.S. Geral
           </h1>
           <div className="flex gap-2 w-full sm:w-auto">
             <button 
@@ -359,8 +392,12 @@ Atendimento Recente: ${formData.atendimentoRecente}
           >
             <div className="flex items-center gap-2">
               <span className="text-sm uppercase tracking-wider">Técnicos da região</span>
-              {techData !== defaultTechData && (
-                <span className="bg-emerald-100 text-emerald-700 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase">Atualizado via IA</span>
+              {isLoadingTech ? (
+                <Loader2 className="w-3 h-3 animate-spin text-slate-400" />
+              ) : (
+                techData !== defaultTechData && (
+                  <span className="bg-emerald-100 text-emerald-700 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase">Sincronizado via Nuvem</span>
+                )
               )}
             </div>
             <ChevronDown className={`w-5 h-5 transition-transform ${showTechnicians ? 'rotate-180' : ''}`} />
@@ -447,11 +484,36 @@ Atendimento Recente: ${formData.atendimentoRecente}
                   className={getFieldClass('periodo', 'bg-white')}
                 >
                   <option value="">Selecione...</option>
-                  <option value="Manhã">Manhã (08:00 - 12:00)</option>
-                  <option value="Tarde">Tarde (13:00 - 18:00)</option>
-                  <option value="Noite">Noite (18:00 - 22:00)</option>
+                  <option value="Horário Comercial">Horário Comercial</option>
+                  <option value="Primeira do dia">Primeira do dia</option>
+                  <option value="Manhã (9 às 12h30)">Manhã (9 às 12h30)</option>
+                  <option value="Tarde (13 às 17h30)">Tarde (13 às 17h30)</option>
+                  <option value="Última do dia">Última do dia</option>
+                  <option value="Após (Informar Horário)">Após (Informar Horário)</option>
                 </select>
               </div>
+              <AnimatePresence>
+                {formData.periodo === 'Após (Informar Horário)' && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="pt-2">
+                      <label className="block text-xs font-medium text-slate-500 mb-1">Horário Específico</label>
+                      <input 
+                        type="text" 
+                        name="horarioEspecifico"
+                        placeholder="Ex: 16:30"
+                        value={formData.horarioEspecifico}
+                        onChange={handleInputChange}
+                        className={getFieldClass('horarioEspecifico')}
+                      />
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </Card>
 
@@ -467,10 +529,8 @@ Atendimento Recente: ${formData.atendimentoRecente}
                   className={getFieldClass('roteador', 'bg-white')}
                 >
                   <option value="">Selecione...</option>
-                  <option value="TP-Link">TP-Link</option>
-                  <option value="Intelbras">Intelbras</option>
-                  <option value="D-Link">D-Link</option>
-                  <option value="Huawei">Huawei</option>
+                  <option value="Comodato">Comodato</option>
+                  <option value="Compra">Compra</option>
                 </select>
               </div>
               <div>
@@ -482,8 +542,8 @@ Atendimento Recente: ${formData.atendimentoRecente}
                   className={getFieldClass('onu', 'bg-white')}
                 >
                   <option value="">Selecione...</option>
-                  <option value="Bridge">Bridge</option>
-                  <option value="Router">Router</option>
+                  <option value="Comodato">Comodato</option>
+                  <option value="Compra">Compra</option>
                 </select>
               </div>
               <div>
@@ -491,7 +551,7 @@ Atendimento Recente: ${formData.atendimentoRecente}
                 <input 
                   type="text" 
                   name="contato"
-                  placeholder="(XX) XXXXX-XXXX"
+                  placeholder="Contato do cliente"
                   value={formData.contato}
                   onChange={handleInputChange}
                   className={getFieldClass('contato')}
@@ -729,6 +789,47 @@ Atendimento Recente: ${formData.atendimentoRecente}
           </button>
         </div>
 
+        <AnimatePresence>
+          {showClearConfirm && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setShowClearConfirm(false)}
+                className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+              />
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                className="relative bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full border border-slate-100"
+              >
+                <div className="flex items-center gap-3 mb-4 text-red-600">
+                  <Trash2 className="w-6 h-6" />
+                  <h3 className="text-lg font-bold text-slate-800">Limpar Campos?</h3>
+                </div>
+                <p className="text-slate-600 mb-6">
+                  Tem certeza que deseja apagar todas as informações preenchidas? Esta ação não pode ser desfeita.
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowClearConfirm(false)}
+                    className="flex-1 px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition-all"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={confirmClear}
+                    className="flex-1 px-4 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold shadow-lg shadow-red-200 transition-all"
+                  >
+                    Sim, Limpar
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );
