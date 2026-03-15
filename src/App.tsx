@@ -36,6 +36,12 @@ interface Technician {
 interface TechData {
   moto: Technician[];
   car: Technician[];
+  routeStatus?: RouteStatus;
+}
+
+interface RouteStatus {
+  text: string;
+  color: 'green' | 'yellow' | 'red';
 }
 
 interface FormData {
@@ -92,7 +98,11 @@ const defaultTechData: TechData = {
     { name: "Maxwell Lemos", region: "Centro até Loty (todos os bairros entre eles)", city: "Itanhaém", obs: "Noturno" },
     { name: "Marcos Vinicius", region: "Todas as regiões", city: "Mongaguá", obs: "Noturno" },
     { name: "Gabriel Felipe", region: "Todas as regiões", city: "Praia Grande", obs: "Noturno" },
-  ]
+  ],
+  routeStatus: {
+    text: 'Normal',
+    color: 'green'
+  }
 };
 
 export default function App() {
@@ -105,6 +115,9 @@ export default function App() {
   const [copied, setCopied] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [showStatusEdit, setShowStatusEdit] = useState(false);
+  const [newStatusText, setNewStatusText] = useState('');
+  const [newStatusColor, setNewStatusColor] = useState<'green' | 'yellow' | 'red'>('green');
 
   // Sincronização em tempo real com o Firebase
   React.useEffect(() => {
@@ -113,6 +126,10 @@ export default function App() {
     const unsubscribe = onSnapshot(techDoc, (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.data() as TechData;
+        // Garante que o status da rota exista mesmo em documentos antigos
+        if (!data.routeStatus) {
+          data.routeStatus = defaultTechData.routeStatus;
+        }
         setTechData(data);
       } else {
         // Se não existir no banco, inicializa com os dados padrão
@@ -299,6 +316,47 @@ Recente Suporte/OS: ${formData.atendimentoRecente}
     }
   };
 
+  const handleUpdateStatus = async () => {
+    try {
+      const techDoc = doc(db, 'settings', 'technicians');
+      await setDoc(techDoc, {
+        ...techData,
+        routeStatus: {
+          text: newStatusText,
+          color: newStatusColor
+        }
+      }, { merge: true });
+      setShowStatusEdit(false);
+    } catch (error) {
+      console.error("Erro ao atualizar status:", error);
+      alert("Erro ao atualizar o status da rota.");
+    }
+  };
+
+  const openStatusEdit = () => {
+    setNewStatusText(techData.routeStatus?.text || '');
+    setNewStatusColor(techData.routeStatus?.color || 'green');
+    setShowStatusEdit(true);
+  };
+
+  const getStatusColorClass = (color?: string) => {
+    switch (color) {
+      case 'green': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+      case 'yellow': return 'bg-amber-100 text-amber-700 border-amber-200';
+      case 'red': return 'bg-rose-100 text-rose-700 border-rose-200';
+      default: return 'bg-slate-100 text-slate-700 border-slate-200';
+    }
+  };
+
+  const getStatusDotClass = (color?: string) => {
+    switch (color) {
+      case 'green': return 'bg-emerald-500';
+      case 'yellow': return 'bg-amber-500';
+      case 'red': return 'bg-rose-500';
+      default: return 'bg-slate-500';
+    }
+  };
+
   const getFieldClass = (fieldName: string, baseClass: string = "") => {
     const errorClass = errors.includes(fieldName) ? "border-red-500 ring-1 ring-red-500" : "border-slate-200 focus:ring-red-500 focus:border-red-500";
     return `${baseClass} w-full p-2 border rounded-lg outline-none transition-all ${errorClass}`;
@@ -390,14 +448,45 @@ Recente Suporte/OS: ${formData.atendimentoRecente}
             onClick={() => setShowTechnicians(!showTechnicians)}
             className="w-full px-6 py-4 flex items-center justify-between text-red-600 font-semibold hover:bg-red-50 transition-colors"
           >
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="text-sm uppercase tracking-wider">Técnicos da região</span>
               {isLoadingTech ? (
                 <Loader2 className="w-3 h-3 animate-spin text-slate-400" />
               ) : (
-                techData !== defaultTechData && (
-                  <span className="bg-emerald-100 text-emerald-700 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase">Sincronizado via Nuvem</span>
-                )
+                <>
+                  {techData !== defaultTechData && (
+                    <span className="bg-emerald-100 text-emerald-700 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase">Sincronizado via Nuvem</span>
+                  )}
+                  {techData.routeStatus ? (
+                    <div className="flex items-center gap-2">
+                      <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[10px] font-bold uppercase ${getStatusColorClass(techData.routeStatus.color)}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${getStatusDotClass(techData.routeStatus.color)}`} />
+                        Status: {techData.routeStatus.text}
+                      </div>
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openStatusEdit();
+                        }}
+                        className="p-1 hover:bg-slate-200 rounded text-slate-400 hover:text-slate-600 transition-colors"
+                        title="Editar Status"
+                      >
+                        <Settings className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openStatusEdit();
+                      }}
+                      className="flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-slate-200 bg-slate-50 text-slate-500 text-[10px] font-bold uppercase hover:bg-slate-100 transition-colors"
+                    >
+                      <Settings className="w-3 h-3" />
+                      Definir Status
+                    </button>
+                  )}
+                </>
               )}
             </div>
             <ChevronDown className={`w-5 h-5 transition-transform ${showTechnicians ? 'rotate-180' : ''}`} />
@@ -788,6 +877,68 @@ Recente Suporte/OS: ${formData.atendimentoRecente}
             Limpar
           </button>
         </div>
+
+        {/* Modal de Edição de Status */}
+        <AnimatePresence>
+          {showStatusEdit && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+              <motion.div 
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden"
+              >
+                <div className="p-4 border-b border-slate-100 flex justify-between items-center">
+                  <h2 className="font-bold text-slate-800">Status da Rota</h2>
+                  <button onClick={() => setShowStatusEdit(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+                    <X className="w-5 h-5 text-slate-400" />
+                  </button>
+                </div>
+                <div className="p-6 space-y-4">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Texto do Status</label>
+                    <input 
+                      type="text" 
+                      value={newStatusText}
+                      onChange={(e) => setNewStatusText(e.target.value)}
+                      placeholder="Ex: Rota Normal, Perigo, etc."
+                      className="w-full p-2 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-red-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-2">Cor do Indicador</label>
+                    <div className="flex gap-3">
+                      <button 
+                        onClick={() => setNewStatusColor('green')}
+                        className={`flex-1 py-2 rounded-lg border-2 transition-all ${newStatusColor === 'green' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-100 bg-slate-50 text-slate-400'}`}
+                      >
+                        Verde
+                      </button>
+                      <button 
+                        onClick={() => setNewStatusColor('yellow')}
+                        className={`flex-1 py-2 rounded-lg border-2 transition-all ${newStatusColor === 'yellow' ? 'border-amber-500 bg-amber-50 text-amber-700' : 'border-slate-100 bg-slate-50 text-slate-400'}`}
+                      >
+                        Amarelo
+                      </button>
+                      <button 
+                        onClick={() => setNewStatusColor('red')}
+                        className={`flex-1 py-2 rounded-lg border-2 transition-all ${newStatusColor === 'red' ? 'border-rose-500 bg-rose-50 text-rose-700' : 'border-slate-100 bg-slate-50 text-slate-400'}`}
+                      >
+                        Vermelho
+                      </button>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={handleUpdateStatus}
+                    className="w-full py-3 bg-slate-800 text-white rounded-xl font-bold hover:bg-slate-900 transition-colors shadow-lg active:scale-95"
+                  >
+                    Salvar Status
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
 
         <AnimatePresence>
           {showClearConfirm && (

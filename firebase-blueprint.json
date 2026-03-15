@@ -35,6 +35,14 @@
           "type": "string",
           "format": "date-time",
           "description": "Last time the technicians were updated"
+        },
+        "routeStatus": {
+          "type": "object",
+          "description": "Current status of the route",
+          "properties": {
+            "text": { "type": "string" },
+            "color": { "type": "string", "enum": ["green", "yellow", "red"] }
+          }
         }
       }
     }
