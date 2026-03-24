@@ -531,10 +531,19 @@ Recente Suporte/OS: ${formData.atendimentoRecente}
               ))}
             </div>
             {formData.atendimentoRecente === 'Sim' && (
-              <div className="grid grid-cols-3 gap-3 pt-2">
-                {['tipoUltimaOs', 'dataUltimaOs', 'encerramentoUltimaOs'].map(f => (
-                  <input key={f} type="text" name={f} value={formData[f as keyof FormData]} onChange={handleInputChange} className={getFieldClass(f, 'text-sm')} />
-                ))}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+                <div>
+                  <label className="block text-[10px] font-medium text-slate-400 uppercase mb-1">Tipo</label>
+                  <input type="text" name="tipoUltimaOs" placeholder="Ex: Reparo" value={formData.tipoUltimaOs} onChange={handleInputChange} className={getFieldClass('tipoUltimaOs', 'text-sm')} />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-medium text-slate-400 uppercase mb-1">Data</label>
+                  <input type="text" name="dataUltimaOs" placeholder="Ex: 20/03" value={formData.dataUltimaOs} onChange={handleInputChange} className={getFieldClass('dataUltimaOs', 'text-sm')} />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-medium text-slate-400 uppercase mb-1">Encerramento</label>
+                  <input type="text" name="encerramentoUltimaOs" placeholder="Ex: OK" value={formData.encerramentoUltimaOs} onChange={handleInputChange} className={getFieldClass('encerramentoUltimaOs', 'text-sm')} />
+                </div>
               </div>
             )}
           </div>
