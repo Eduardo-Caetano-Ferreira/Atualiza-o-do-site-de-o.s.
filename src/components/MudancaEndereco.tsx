@@ -183,7 +183,6 @@ Taxa: ${formData.taxa}
 Pode adiantar? ${formData.podeAdiantar}
 Data: ${formData.dataAgendamento.split('-').reverse().join('/')}
 Período: ${formData.periodo}${formData.periodo === 'Após (Informar Horário)' ? ` (${formData.horarioEspecifico})` : ''}
-Vagas Preenchidas: ${techData.vagasInfo?.count || '0'} - ${techData.vagasInfo?.day || ''}
 
 === ENDEREÇOS E CONTATO ===
 Cliente desde: ${formData.clienteDesde}

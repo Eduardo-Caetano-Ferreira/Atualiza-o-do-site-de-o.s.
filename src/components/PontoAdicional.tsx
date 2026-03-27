@@ -215,7 +215,6 @@ export function PontoAdicional({ operatorName }: PontoAdicionalProps) {
 === AGENDAMENTO ===
 DATA: ${formData.dataAgendamento.split('-').reverse().join('/')}
 PERÍODO: ${formData.periodo}${formData.periodo === 'Após (Informar Horário)' ? ` (${formData.horarioEspecifico})` : ''}
-Vagas Preenchidas: ${techData.vagasInfo?.count || '0'} - ${techData.vagasInfo?.day || ''}
 
 === INFORMAÇÕES DO CLIENTE ===
 Plano Atual: ${formData.planoAtual}
