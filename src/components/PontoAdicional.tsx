@@ -70,6 +70,8 @@ interface PontoAdicionalFormData {
   horarioEspecifico: string;
   solicitacao: string;
   contato: string;
+  conseguiuContato: boolean;
+  tentativasContato: string;
   planoAtual: string;
   clienteDesde: string;
   roteadorPrincipal: string;
@@ -96,6 +98,8 @@ const initialFormState: PontoAdicionalFormData = {
   horarioEspecifico: '',
   solicitacao: '',
   contato: '',
+  conseguiuContato: true,
+  tentativasContato: '',
   planoAtual: '',
   clienteDesde: '',
   roteadorPrincipal: '',
@@ -204,6 +208,10 @@ export function PontoAdicional({ operatorName }: PontoAdicionalProps) {
       newErrors.push('nomeAutorizador');
     }
 
+    if (!formData.conseguiuContato && !formData.tentativasContato.trim()) {
+      newErrors.push('tentativasContato');
+    }
+
     setErrors(newErrors);
     return newErrors.length === 0;
   };
@@ -220,7 +228,7 @@ PERÍODO: ${formData.periodo}${formData.periodo === 'Após (Informar Horário)' 
 Plano Atual: ${formData.planoAtual}
 Roteador Principal: ${formData.roteadorPrincipal}
 ONU: ${formData.onu}
-Contato: ${formData.contato}
+Contato: ${formData.contato} (Conseguiu Contato: ${formData.conseguiuContato ? 'Sim' : 'Não'})${!formData.conseguiuContato ? `\nFormas de Contato Tentadas: ${formData.tentativasContato}` : ''}
 Cliente desde: ${formData.clienteDesde}
 
 === DETALHES DA SOLICITAÇÃO ===
@@ -547,7 +555,19 @@ Autorização por Exceção: ${formData.autorizacaoExcecao}${formData.autorizaca
         <Card icon={<User className="w-4 h-4" />} title="Informações do Cliente">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="md:col-span-1">
-              <label className="block text-xs font-medium text-slate-500 mb-1">Contato</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-medium text-slate-500">Contato</label>
+                <label className="flex items-center gap-1.5 text-xs text-slate-600 font-medium cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    name="conseguiuContato" 
+                    checked={formData.conseguiuContato} 
+                    onChange={handleInputChange} 
+                    className="w-3.5 h-3.5 rounded border-slate-300 text-red-600 focus:ring-red-500 cursor-pointer" 
+                  />
+                  Conseguiu contato?
+                </label>
+              </div>
               <input 
                 type="text" 
                 name="contato"
@@ -573,6 +593,19 @@ Autorização por Exceção: ${formData.autorizacaoExcecao}${formData.autorizaca
                 <option value="1000 Mbps">1000 Mbps</option>
               </select>
             </div>
+            {!formData.conseguiuContato && (
+              <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="md:col-span-2 bg-red-50/30 p-3 rounded-lg border border-red-100">
+                <label className="block text-xs font-bold text-red-600 mb-1 uppercase tracking-wider">Formas de contato que tentou</label>
+                <textarea 
+                  name="tentativasContato" 
+                  rows={2} 
+                  value={formData.tentativasContato} 
+                  onChange={handleInputChange} 
+                  className={getFieldClass('tentativasContato', 'bg-white p-2 resize-none')} 
+                  placeholder="Ex: Ligação sem resposta, mensagem enviada no WhatsApp sem retorno." 
+                />
+              </motion.div>
+            )}
             <div>
               <label className="block text-xs font-medium text-slate-500 mb-1">Cliente Desde</label>
               <input 
@@ -771,6 +804,7 @@ Autorização por Exceção: ${formData.autorizacaoExcecao}${formData.autorizaca
                     className={getFieldClass('motivoIsencao', 'bg-white')}
                   >
                     <option value="">Selecione...</option>
+                    <option value="Upgrade">Upgrade</option>
                     <option value="Cliente antigo">Cliente antigo</option>
                     <option value="Primeira isenção">Primeira isenção</option>
                     <option value="Ameaçou cancelamento">Ameaçou cancelamento</option>

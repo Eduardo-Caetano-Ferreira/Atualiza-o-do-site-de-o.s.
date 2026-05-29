@@ -50,6 +50,8 @@ interface FormData {
   roteador: string;
   onu: string;
   contato: string;
+  conseguiuContato: boolean;
+  tentativasContato: string;
   clienteDesde: string;
   solicitacao: string;
   sinalStatus: string;
@@ -69,6 +71,8 @@ const initialFormState: FormData = {
   roteador: '',
   onu: '',
   contato: '',
+  conseguiuContato: true,
+  tentativasContato: '',
   clienteDesde: '',
   solicitacao: '',
   sinalStatus: '',
@@ -153,8 +157,9 @@ export function OSGeral({ operatorName }: OSGeralProps) {
   }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    const { name, value, type } = e.target;
+    const finalValue = type === 'checkbox' ? (e.target as HTMLInputElement).checked : value;
+    setFormData(prev => ({ ...prev, [name]: finalValue }));
     if (errors.includes(name)) {
       setErrors(prev => prev.filter(err => err !== name));
     }
@@ -195,6 +200,10 @@ export function OSGeral({ operatorName }: OSGeralProps) {
       if (!formData.nomeAutorizador) newErrors.push('nomeAutorizador');
     }
 
+    if (!formData.conseguiuContato && !formData.tentativasContato.trim()) {
+      newErrors.push('tentativasContato');
+    }
+
     setErrors(newErrors);
     return newErrors.length === 0;
   };
@@ -215,7 +224,7 @@ PERÍODO: ${periodoTexto}
 === INFORMAÇÕES DO CLIENTE ===
 Roteador: ${formData.roteador}
 ONU: ${formData.onu}
-Contato: ${formData.contato}
+Contato: ${formData.contato} (Conseguiu Contato: ${formData.conseguiuContato ? 'Sim' : 'Não'})${!formData.conseguiuContato ? `\nFormas de Contato Tentadas: ${formData.tentativasContato}` : ''}
 Cliente desde: ${formData.clienteDesde}
 
 === DETALHES DA SOLICITAÇÃO ===
@@ -499,13 +508,38 @@ Recente Suporte/OS: ${formData.atendimentoRecente}
               </div>
             ))}
             <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1">Contato</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-medium text-slate-500">Contato</label>
+                <label className="flex items-center gap-1.5 text-xs text-slate-600 font-medium cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    name="conseguiuContato" 
+                    checked={formData.conseguiuContato} 
+                    onChange={handleInputChange} 
+                    className="w-3.5 h-3.5 rounded border-slate-300 text-red-600 focus:ring-red-500 cursor-pointer" 
+                  />
+                  Conseguiu contato?
+                </label>
+              </div>
               <input type="text" name="contato" value={formData.contato} onChange={handleInputChange} className={getFieldClass('contato')} />
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-500 mb-1">Cliente desde</label>
               <input type="text" name="clienteDesde" value={formData.clienteDesde} onChange={handleInputChange} className={getFieldClass('clienteDesde')} />
             </div>
+            {!formData.conseguiuContato && (
+              <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="md:col-span-2 bg-red-50/30 p-3 rounded-lg border border-red-100">
+                <label className="block text-xs font-bold text-red-600 mb-1 uppercase tracking-wider">Formas de contato que tentou</label>
+                <textarea 
+                  name="tentativasContato" 
+                  rows={2} 
+                  value={formData.tentativasContato} 
+                  onChange={handleInputChange} 
+                  className={getFieldClass('tentativasContato', 'bg-white p-2 resize-none')} 
+                  placeholder="Ex: Ligação sem resposta, mensagem enviada no WhatsApp sem retorno." 
+                />
+              </motion.div>
+            )}
           </div>
         </Card>
 

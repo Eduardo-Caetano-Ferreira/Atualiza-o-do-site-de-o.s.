@@ -71,6 +71,8 @@ interface MudancaFormData {
   periodo: string;
   clienteDesde: string;
   telefone: string;
+  conseguiuContato: boolean;
+  tentativasContato: string;
   enderecoAtual: string;
   novoEndereco: string;
   referencia: string;
@@ -91,6 +93,8 @@ const initialFormState: MudancaFormData = {
   periodo: '',
   clienteDesde: '',
   telefone: '',
+  conseguiuContato: true,
+  tentativasContato: '',
   enderecoAtual: '',
   novoEndereco: '',
   referencia: '',
@@ -145,8 +149,9 @@ export function MudancaEndereco({ operatorName }: MudancaEnderecoProps) {
   }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    const { name, value, type } = e.target;
+    const finalValue = type === 'checkbox' ? (e.target as HTMLInputElement).checked : value;
+    setFormData(prev => ({ ...prev, [name]: finalValue }));
     if (errors.includes(name)) {
       setErrors(prev => prev.filter(err => err !== name));
     }
@@ -169,6 +174,10 @@ export function MudancaEndereco({ operatorName }: MudancaEnderecoProps) {
       newErrors.push('horarioEspecifico');
     }
 
+    if (!formData.conseguiuContato && !formData.tentativasContato.trim()) {
+      newErrors.push('tentativasContato');
+    }
+
     setErrors(newErrors);
     return newErrors.length === 0;
   };
@@ -186,7 +195,7 @@ Período: ${formData.periodo}${formData.periodo === 'Após (Informar Horário)' 
 
 === ENDEREÇOS E CONTATO ===
 Cliente desde: ${formData.clienteDesde}
-Telefone: ${formData.telefone}
+Telefone: ${formData.telefone} (Conseguiu Contato: ${formData.conseguiuContato ? 'Sim' : 'Não'})${!formData.conseguiuContato ? `\nFormas de Contato Tentadas: ${formData.tentativasContato}` : ''}
 Endereço Atual: ${formData.enderecoAtual}
 Novo Endereço: ${formData.novoEndereco}
 Referência: ${formData.referencia}
@@ -583,7 +592,19 @@ Autorização por Exceção: ${formData.autorizacaoExcecao}${formData.autorizaca
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1">Telefone (Contato)</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-medium text-slate-500">Telefone (Contato)</label>
+                <label className="flex items-center gap-1.5 text-xs text-slate-600 font-medium cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    name="conseguiuContato" 
+                    checked={formData.conseguiuContato} 
+                    onChange={handleInputChange} 
+                    className="w-3.5 h-3.5 rounded border-slate-300 text-red-600 focus:ring-red-500 cursor-pointer" 
+                  />
+                  Conseguiu contato?
+                </label>
+              </div>
               <input 
                 type="text" 
                 name="telefone"
@@ -593,6 +614,20 @@ Autorização por Exceção: ${formData.autorizacaoExcecao}${formData.autorizaca
                 className={getFieldClass('telefone')}
               />
             </div>
+            {/* Espaçador opcional ou condicional para manter o layout grid limpo */}
+            {!formData.conseguiuContato && (
+              <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="md:col-span-2 bg-red-50/30 p-3 rounded-lg border border-red-100">
+                <label className="block text-xs font-bold text-red-600 mb-1 uppercase tracking-wider">Formas de contato que tentou</label>
+                <textarea 
+                  name="tentativasContato" 
+                  rows={2} 
+                  value={formData.tentativasContato} 
+                  onChange={handleInputChange} 
+                  className={getFieldClass('tentativasContato', 'bg-white p-2 resize-none')} 
+                  placeholder="Ex: Ligação sem resposta, mensagem enviada no WhatsApp sem retorno." 
+                />
+              </motion.div>
+            )}
             <div className="md:col-span-2">
               <label className="block text-xs font-medium text-slate-500 mb-1">Endereço Atual</label>
               <input 
